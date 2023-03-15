@@ -264,7 +264,8 @@ def startScanning(fileX = None , fileY = None, fileZ = None, ms= 5, iterations =
 
     mcldll.MCL_ReleaseHandle(handle)
 
-   #this scans using a loop and absolute movements 
+
+#this scans using a loop and absolute movements 
 def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwell_time= 0, iterations = 1):
     sleep(.1)
     handle = mcldll.MCL_InitHandle()
@@ -297,8 +298,9 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     end = timing.time()
 
     
-    mcldll.MCL_SingleWriteN(c_double(00), axisX, handle)
-    mcldll.MCL_SingleWriteN(c_double(00), axisY, handle)
+    mcldll.MCL_SingleWriteN(c_double(waveformX[0]), axisX, handle)
+    mcldll.MCL_SingleWriteN(c_double(waveformY[0]), axisY, handle)
+    
     
     print(f'total time = {end-start}')
     mcldll.MCL_ReleaseHandle(handle)
@@ -307,14 +309,18 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     #this runs the scan and collects the data at the same time
 
 if __name__ == '__main__':
-    square_raster = True
+    square_raster = False
     iterations  = 3
+    x_start = 20
+    y_start = 0
+    x_end = 100
+    y_end = 100
     nx_pix =100
     ny_pix = 100
     n_pixels = nx_pix*ny_pix 
     dwell_time = 1e2
 
-    createScanPoints(x_start = 20, y_start = 0, nx_pix = nx_pix, ny_pix = ny_pix, x_end = 50, y_end = 100, file_name = 'path', square_raster = square_raster)
+    createScanPoints(x_start = x_start, y_start = y_start, nx_pix = nx_pix, ny_pix = ny_pix, x_end = x_end, y_end =  y_end, file_name = 'path', square_raster = square_raster)
 
 
     
@@ -322,6 +328,8 @@ if __name__ == '__main__':
     tagger.setTestSignal(1, True)
 
     img = np.zeros((ny_pix, nx_pix))
+    plt.imshow(img, extent=[x_start, x_end, y_end, y_start])
+    cbar = plt.colorbar()
     for i in range(iterations):
         
         delay_signal = tt.DelayedChannel(tagger, 3, dwell_time * 1e6)
@@ -333,10 +341,12 @@ if __name__ == '__main__':
         
         p1.start()
         
-    
+        
+        
         while 1:
             counts = cbm.getData()
             current_img = np.reshape(counts, (ny_pix, nx_pix))
+            
             for i in range(ny_pix):
                 if i%2 == 1 and square_raster:
                     current_img[i,:] = current_img[i,::-1]
@@ -344,10 +354,19 @@ if __name__ == '__main__':
             mask = current_img !=0
             img[mask]=current_img[mask]
             
-            plt.imshow(img)
-            plt.pause(.001)
+            cbar.remove()
+            plt.imshow(img, extent=[x_start, x_end, y_end, y_start])
+            plt.xticks(np.arange(x_start, x_end, (x_end-x_start)/10))
+            plt.yticks(np.arange(y_start, y_end, (y_end-y_start)/10))
+            plt.ylabel('μm')
+            plt.xlabel('μm')
+            cbar = plt.colorbar()
+            cbar.set_label('Counts')
+            plt.pause(.5)
+            
             if np.all(counts) == True:
                 break
+        
       
         p1.join()
     
@@ -355,3 +374,4 @@ if __name__ == '__main__':
     tt.freeTimeTagger(tagger) 
     
    
+
