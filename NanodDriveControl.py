@@ -293,7 +293,7 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
 
             mcldll.MCL_SingleWriteN(posY, axisY, handle)
             sleep_us(dwell_time)
-            #timing.sleep(dwell_time)
+            
 
     end = timing.time()
 
@@ -306,27 +306,83 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     mcldll.MCL_ReleaseHandle(handle)
 
     
-    #this runs the scan and collects the data at the same time
-
+    
+#this starts a scan and collects data integrating over each scan and adding the all the points to the final plot
 if __name__ == '__main__':
     square_raster = False
-    iterations  = 3
-    x_start = 20
+    iterations  = 10
+    x_start = 00
     y_start = 0
-    x_end = 100
-    y_end = 100
+    x_end = 200
+    y_end = 200
+    nx_pix =50
+    ny_pix = 50
+    n_pixels = nx_pix*ny_pix 
+    dwell_time = 1e2
+
+    createScanPoints(x_start = x_start, y_start = y_start, nx_pix = nx_pix, ny_pix = ny_pix, x_end = x_end, y_end =  y_end, file_name = 'path', square_raster = square_raster)
+
+    
+    
+    tagger = tt.createTimeTagger()
+    #tagger.setTestSignal(1, True)
+    tagger.setTriggerLevel(1,-.5)
+    img = np.zeros((ny_pix, nx_pix))
+    
+    plt.imshow(img, extent=[x_start, x_end, y_end, y_start], vmin = 0)
+    cbar = plt.colorbar()
+    
+
+    for i in range(iterations):
+        
+        delay_signal = tt.DelayedChannel(tagger, 3, dwell_time * 1e6)
+        delay_ch = delay_signal.getChannel()
+
+        cbm = tt.CountBetweenMarkers(tagger, 1, 3, delay_ch, nx_pix*ny_pix )
+        p1 = mp.Process(target = startScanningWithoutWaveform, args = ('pathX.txt' , 'pathY.txt', None, dwell_time, 1))#the args are (input pos for x, input pos for y, input pos for z, dwell time , iteratoins)
+        
+        p1.start()
+        p1.join()
+
+        counts = cbm.getData()
+        current_img =  np.reshape(counts, (ny_pix, nx_pix))
+        img+=current_img
+        cbar.remove()
+        plt.imshow(img, extent=[x_start, x_end, y_end, y_start], vmin = 0)
+        plt.xticks(np.arange(x_start, x_end, (x_end-x_start)/10))
+        plt.yticks(np.arange(y_start, y_end, (y_end-y_start)/10))
+        plt.ylabel('μm')
+        plt.xlabel('μm')
+        cbar = plt.colorbar()
+        cbar.set_label('Counts')
+        plt.pause(1)
+            
+    plt.show()
+    
+
+    tt.freeTimeTagger(tagger) 
+    
+
+#this starts a scan and collects data with a live updated feed of your FOV
+if __name__ == '__main__':
+    square_raster = False
+    iterations  = 1
+    x_start = 00
+    y_start = 0
+    x_end = 200
+    y_end = 200
     nx_pix =100
     ny_pix = 100
     n_pixels = nx_pix*ny_pix 
-    dwell_time = 1e2
+    dwell_time = 1e3
 
     createScanPoints(x_start = x_start, y_start = y_start, nx_pix = nx_pix, ny_pix = ny_pix, x_end = x_end, y_end =  y_end, file_name = 'path', square_raster = square_raster)
 
 
     
     tagger = tt.createTimeTagger()
-    tagger.setTestSignal(1, True)
-
+    #tagger.setTestSignal(1, True)
+    tagger.setTriggerLevel(1,-.5)
     img = np.zeros((ny_pix, nx_pix))
     plt.imshow(img, extent=[x_start, x_end, y_end, y_start])
     cbar = plt.colorbar()
@@ -334,7 +390,6 @@ if __name__ == '__main__':
         
         delay_signal = tt.DelayedChannel(tagger, 3, dwell_time * 1e6)
         delay_ch = delay_signal.getChannel()
-
 
         cbm = tt.CountBetweenMarkers(tagger, 1, 3, delay_ch, nx_pix*ny_pix )
         p1 = mp.Process(target = startScanningWithoutWaveform, args = ('pathX.txt' , 'pathY.txt', None, dwell_time, 1))#the args are (input pos for x, input pos for y, input pos for z, dwell time , iteratoins)
@@ -355,16 +410,17 @@ if __name__ == '__main__':
             img[mask]=current_img[mask]
             
             cbar.remove()
-            plt.imshow(img, extent=[x_start, x_end, y_end, y_start])
+            plt.imshow(img, extent=[x_start, x_end, y_end, y_start], vmin = 0)
             plt.xticks(np.arange(x_start, x_end, (x_end-x_start)/10))
             plt.yticks(np.arange(y_start, y_end, (y_end-y_start)/10))
             plt.ylabel('μm')
             plt.xlabel('μm')
             cbar = plt.colorbar()
             cbar.set_label('Counts')
-            plt.pause(.5)
             
-            if np.all(counts) == True:
+            plt.pause(.5)
+            if p1.is_alive()==False:
+                sleep(.5)
                 break
         
       
