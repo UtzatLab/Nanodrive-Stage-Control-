@@ -8,6 +8,7 @@ import threading
 from queue import Queue
 import time
 import matplotlib.pyplot as plt
+import ctypes
 # change the path to match your system.
 
 mcldll = CDLL(r"C:/Program Files/Mad City Labs/NanoDrive/Madlib.dll")
@@ -24,6 +25,18 @@ the lagged parameter allows for the repetiiton of values for however many steps 
 the repeat parameter allows for a file to be written with the same pattern repeating useful for a raster scan
 the start coordinate tells you what value you start at in the FOV
 '''
+#this function allows for the pause of steps less than .01 s which is what sleep() is limited to. 
+#use the functin time.perf_counter_ns()  instead of time.time() if you want to test accuracy
+# can get microsecond pauses doesnt quite get 1 us but if you input 1 us it pauses for around 4 us. the larget the number the better the accuracy 
+
+
+def sleep_us(microseconds):
+    start_time = time.perf_counter_ns()
+    while True:
+        elapsed_time = time.perf_counter_ns() - start_time
+        remaining_time = microseconds - elapsed_time /1000
+        if remaining_time <= 0:
+            break
 
 def testStageWaveformAccuracy(axis, points, time , file_name, dim, lagged = False, repeat = False):
  
@@ -253,6 +266,7 @@ def startScanning(fileX = None , fileY = None, fileZ = None, ms= 5, iterations =
 
    #this scans using a loop and absolute movements 
 def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwell_time= 0, iterations = 1):
+    sleep(.1)
     handle = mcldll.MCL_InitHandle()
     start = timing.time()
     if fileX:
@@ -262,7 +276,7 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     if fileZ:
         waveformZ = np.loadtxt(fileZ)
     
-   
+    
     mcldll.MCL_IssBindClockToAxis(1, 3, 1, handle)
     start = timing.time()
     for j in range(iterations):
@@ -277,8 +291,9 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
             mcldll.MCL_SingleReadN(axisX, handle)
 
             mcldll.MCL_SingleWriteN(posY, axisY, handle)
-            mcldll.MCL_SingleReadN(axisY, handle)
-            timing.sleep(dwell_time)
+            sleep_us(dwell_time)
+            #timing.sleep(dwell_time)
+
     end = timing.time()
 
     
@@ -292,26 +307,37 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     #this runs the scan and collects the data at the same time
 
 if __name__ == '__main__':
-    square_raster = False
-    iterations  = 4
+    square_raster = True
+    iterations  = 3
     nx_pix =100
     ny_pix = 100
     n_pixels = nx_pix*ny_pix 
+    dwell_time = 1e2
+
+    createScanPoints(x_start = 20, y_start = 0, nx_pix = nx_pix, ny_pix = ny_pix, x_end = 50, y_end = 100, file_name = 'path', square_raster = square_raster)
+
+
+    
     tagger = tt.createTimeTagger()
     tagger.setTestSignal(1, True)
 
     img = np.zeros((ny_pix, nx_pix))
     for i in range(iterations):
         
-        cbm = tt.CountBetweenMarkers(tagger, 1, 3, 3, nx_pix*ny_pix )
-        p1 = mp.Process(target = startScanningWithoutWaveform, args = ('pathX.txt' , 'pathY.txt', None, 0, 1))
+        delay_signal = tt.DelayedChannel(tagger, 3, dwell_time * 1e6)
+        delay_ch = delay_signal.getChannel()
+
+
+        cbm = tt.CountBetweenMarkers(tagger, 1, 3, delay_ch, nx_pix*ny_pix )
+        p1 = mp.Process(target = startScanningWithoutWaveform, args = ('pathX.txt' , 'pathY.txt', None, dwell_time, 1))#the args are (input pos for x, input pos for y, input pos for z, dwell time , iteratoins)
         
         p1.start()
+        
     
-        while p1.is_alive():
+        while 1:
             counts = cbm.getData()
             current_img = np.reshape(counts, (ny_pix, nx_pix))
-
+            print(counts)
             for i in range(ny_pix):
                 if i%2 == 1 and square_raster:
                     current_img[i,:] = current_img[i,::-1]
@@ -320,8 +346,13 @@ if __name__ == '__main__':
             img[mask]=current_img[mask]
             
             plt.imshow(img)
-            plt.pause(.00000000001)
+            plt.pause(.001)
+            if np.all(counts) == True:
+                break
+        print(counts)
+      
         p1.join()
+    
         
     tt.freeTimeTagger(tagger) 
     
