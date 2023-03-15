@@ -337,7 +337,6 @@ if __name__ == '__main__':
         while 1:
             counts = cbm.getData()
             current_img = np.reshape(counts, (ny_pix, nx_pix))
-            print(counts)
             for i in range(ny_pix):
                 if i%2 == 1 and square_raster:
                     current_img[i,:] = current_img[i,::-1]
@@ -349,7 +348,6 @@ if __name__ == '__main__':
             plt.pause(.001)
             if np.all(counts) == True:
                 break
-        print(counts)
       
         p1.join()
     
