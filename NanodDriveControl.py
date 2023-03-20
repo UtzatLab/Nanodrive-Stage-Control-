@@ -292,6 +292,7 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
             mcldll.MCL_SingleReadN(axisX, handle)
 
             mcldll.MCL_SingleWriteN(posY, axisY, handle)
+         
             sleep_us(dwell_time)
             
 
@@ -305,7 +306,7 @@ def startScanningWithoutWaveform(fileX = None , fileY = None, fileZ = None, dwel
     print(f'total time = {end-start}')
     mcldll.MCL_ReleaseHandle(handle)
 
-    
+
     
 #this starts a scan and collects data integrating over each scan and adding the all the points to the final plot
 if __name__ == '__main__':
@@ -347,6 +348,8 @@ if __name__ == '__main__':
         counts = cbm.getData()
         current_img =  np.reshape(counts, (ny_pix, nx_pix))
         img+=current_img
+        
+
         cbar.remove()
         plt.imshow(img, extent=[x_start, x_end, y_end, y_start], vmin = 0)
         plt.xticks(np.arange(x_start, x_end, (x_end-x_start)/10))
@@ -356,7 +359,7 @@ if __name__ == '__main__':
         cbar = plt.colorbar()
         cbar.set_label('Counts')
         plt.pause(1)
-            
+        
     plt.show()
     
 
@@ -374,7 +377,7 @@ if __name__ == '__main__':
     nx_pix =100
     ny_pix = 100
     n_pixels = nx_pix*ny_pix 
-    dwell_time = 1e3
+    dwell_time = 0
 
     createScanPoints(x_start = x_start, y_start = y_start, nx_pix = nx_pix, ny_pix = ny_pix, x_end = x_end, y_end =  y_end, file_name = 'path', square_raster = square_raster)
 
@@ -402,9 +405,10 @@ if __name__ == '__main__':
             counts = cbm.getData()
             current_img = np.reshape(counts, (ny_pix, nx_pix))
             
-            for i in range(ny_pix):
-                if i%2 == 1 and square_raster:
-                    current_img[i,:] = current_img[i,::-1]
+            if square_raster:
+                for i in range(ny_pix):
+                    if i%2 == 1:
+                        current_img[i,:] = current_img[i,::-1]
 
             mask = current_img !=0
             img[mask]=current_img[mask]
@@ -426,8 +430,8 @@ if __name__ == '__main__':
       
         p1.join()
     
-        
+    
+    
     tt.freeTimeTagger(tagger) 
     
-   
-
+     
